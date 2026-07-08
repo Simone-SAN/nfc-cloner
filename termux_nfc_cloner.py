@@ -30,15 +30,14 @@ def print_header():
 def check_termux_api():
     if not shutil.which("termux-nfc-read"):
         print_header()
-        print(f"{C_RED}{C_BOLD}[!] ERRORE: Strumenti Termux:API non trovati!{C_END}\n")
+        print(f"{C_RED}{C_BOLD}[!] ERRORE: Strumenti Termux:API non trovati nel terminale!{C_END}\n")
         print("Per poter scansionare tag NFC da Termux è necessario:")
         print(f"1. Installare l'app {C_YELLOW}Termux:API{C_END} da F-Droid o Google Play Store.")
         print(f"2. Installare il pacchetto nel terminale eseguendo: {C_GREEN}pkg install termux-api{C_END}")
-        print("3. Assicurarsi che i permessi NFC siano attivi sul telefono.")
-        print("\nPremi INVIO per continuare in modalità di simulazione/consultazione database...")
+        print("3. Assicurarsi che l'NFC e i permessi NFC per Termux siano attivi sul telefono.")
+        print("\nPremi INVIO per uscire...")
         input()
-        return False
-    return True
+        sys.exit(1)
 
 def load_db():
     if not os.path.exists(DB_FILE):
@@ -56,32 +55,13 @@ def save_db(db):
     except Exception as e:
         print(f"{C_RED}Errore durante il salvataggio del database: {e}{C_END}")
 
-def scan_tag(has_api):
+def scan_tag():
     print_header()
     print(f"{C_YELLOW}{C_BOLD}[*] IN ATTESA DI UN TAG NFC...{C_END}")
     print("Avvicina un tag NFC al retro del tuo smartphone.")
     print("Premi Ctrl+C per annullare.")
     print(f"{C_PURPLE}-------------------------------------------------{C_END}")
     
-    if not has_api:
-        # Mock scan for testing/dev environments
-        try:
-            time.sleep(2)
-            print(f"\n{C_GREEN}[+] Tag rilevato (SIMULAZIONE):{C_END}")
-            mock_tag = {
-                "uid": "A1B2C3D4",
-                "type": "Mifare Classic 1K (Simulato)",
-                "payload": "Testo di prova memorizzato nel tag NFC",
-                "timestamp": int(time.time())
-            }
-            print(f"UID: {mock_tag['uid']}")
-            print(f"Tipo: {mock_tag['type']}")
-            return mock_tag
-        except KeyboardInterrupt:
-            print(f"\n{C_RED}Scansione annullata.{C_END}")
-            time.sleep(1)
-            return None
-
     try:
         # Run termux-nfc-read which outputs JSON when tag is scanned
         process = subprocess.Popen(["termux-nfc-read"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -202,7 +182,7 @@ def show_emulation_info():
     input()
 
 def main():
-    has_api = check_termux_api()
+    check_termux_api()
     db = load_db()
     
     while True:
@@ -217,7 +197,7 @@ def main():
         scelta = input(f"{C_BOLD}Scegli un'opzione: {C_END}")
         
         if scelta == "1":
-            new_tag = scan_tag(has_api)
+            new_tag = scan_tag()
             if new_tag:
                 name = input(f"\n{C_BOLD}Assegna un nome a questo tag: {C_END}")
                 new_tag["name"] = name.strip() if name.strip() else f"Tag_{new_tag['uid']}"
