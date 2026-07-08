@@ -10,13 +10,13 @@ import time
 
 DB_FILE = "tags_db.json"
 
-# Detect termux-nfc-read executable path
-TERMUX_NFC_READ_BIN = shutil.which("termux-nfc-read")
-if not TERMUX_NFC_READ_BIN:
-    # Fallback to standard Termux binary path (useful when running as root or in non-standard shell environment)
-    ABS_PATH = "/data/data/com.termux/files/usr/bin/termux-nfc-read"
+# Detect the correct termux-nfc executable (NOT termux-nfc-read, which does not exist)
+TERMUX_NFC_BIN = shutil.which("termux-nfc")
+if not TERMUX_NFC_BIN:
+    # Fallback to absolute path (useful when running as root or in non-standard shell)
+    ABS_PATH = "/data/data/com.termux/files/usr/bin/termux-nfc"
     if os.path.exists(ABS_PATH):
-        TERMUX_NFC_READ_BIN = ABS_PATH
+        TERMUX_NFC_BIN = ABS_PATH
 
 # ANSI Colors for premium terminal aesthetics (Green-only Matrix style)
 C_BLUE = "\033[92m"
@@ -36,14 +36,9 @@ def print_header():
     print(f"{C_GREEN}{C_BOLD}================================================={C_END}")
 
 def check_termux_api():
-    if not TERMUX_NFC_READ_BIN:
+    if not TERMUX_NFC_BIN:
         print_header()
-        print(f"{C_RED}{C_BOLD}[!] ERRORE: Strumenti Termux:API non trovati nel terminale!{C_END}\n")
-        print(f"{C_BOLD}--- INFORMAZIONI DI DEBUG ---{C_END}")
-        print(f"OS Rilevato: {sys.platform} ({os.name})")
-        print(f"Cartella di esecuzione: {os.getcwd()}")
-        print(f"PATH di sistema: {os.environ.get('PATH', 'Non disponibile')}")
-        print(f"{C_BOLD}----------------------------{C_END}\n")
+        print(f"{C_RED}{C_BOLD}[!] ERRORE: Comando 'termux-nfc' non trovato!{C_END}\n")
         print("Per poter scansionare tag NFC da Termux è necessario:")
         print(f"1. Installare l'app {C_YELLOW}Termux:API{C_END} da F-Droid.")
         print(f"2. Installare il pacchetto nel terminale eseguendo: {C_GREEN}pkg install termux-api{C_END}")
@@ -76,36 +71,49 @@ def scan_tag():
     print(f"{C_PURPLE}-------------------------------------------------{C_END}")
     
     try:
-        # Run termux-nfc-read which outputs JSON when tag is scanned
-        process = subprocess.Popen([TERMUX_NFC_READ_BIN], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Step 1: Read the UID of the tag using 'termux-nfc -r id'
+        # This works for both NDEF and non-NDEF cards and returns {"card_id": "XXXX"}
+        proc_id = subprocess.Popen(
+            [TERMUX_NFC_BIN, "-r", "id"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout_id, stderr_id = proc_id.communicate()
         
-        # We wait for the command to return output
-        stdout, stderr = process.communicate()
-        
-        if process.returncode != 0:
-            print(f"\n{C_RED}[!] Errore durante la scansione NFC: {stderr.strip()}{C_END}")
+        if proc_id.returncode != 0:
+            print(f"\n{C_RED}[!] Errore durante la scansione NFC: {stderr_id.strip()}{C_END}")
             time.sleep(2)
             return None
         
-        # Parse JSON output from termux-nfc-read
-        tag_data = json.loads(stdout)
-        
-        # Format the response to fit our database
-        uid = tag_data.get("id", "Sconosciuto")
-        if isinstance(uid, list):
-            uid = "".join(f"{x:02X}" for x in uid)
-            
-        ndef_messages = tag_data.get("ndef_messages", [])
-        payload = ""
-        if ndef_messages:
-            for msg in ndef_messages:
-                for record in msg.get("records", []):
-                    payload += record.get("payload", "") + "\n"
+        id_data = json.loads(stdout_id)
+        # Output format: {"card_id": "04A3B2C1"}
+        uid = id_data.get("card_id", "Sconosciuto").strip()
+
+        # Step 2: Try to read NDEF payload using 'termux-nfc -r short'
+        payload = "Nessun payload NDEF leggibile"
+        tag_type = "NFC Tag"
+        proc_ndef = subprocess.Popen(
+            [TERMUX_NFC_BIN, "-r", "short"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout_ndef, _ = proc_ndef.communicate()
+        if proc_ndef.returncode == 0 and stdout_ndef.strip():
+            try:
+                ndef_data = json.loads(stdout_ndef)
+                # NDEF output structure: {"Record": [{"Payload": "...", ...}]}
+                records = ndef_data.get("Record", [])
+                if records:
+                    tag_type = "NDEF Tag"
+                    payload = "\n".join(
+                        r.get("Payload", "") for r in records if r.get("Payload")
+                    ).strip() or "Payload vuoto"
+            except (json.JSONDecodeError, AttributeError):
+                # Not JSON or different format, use raw output
+                payload = stdout_ndef.strip()
         
         scanned = {
             "uid": uid,
-            "type": tag_data.get("type", "NDEF Tag"),
-            "payload": payload.strip() if payload else "Nessun payload leggibile",
+            "type": tag_type,
+            "payload": payload,
             "timestamp": int(time.time())
         }
         
