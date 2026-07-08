@@ -10,6 +10,14 @@ import time
 
 DB_FILE = "tags_db.json"
 
+# Detect termux-nfc-read executable path
+TERMUX_NFC_READ_BIN = shutil.which("termux-nfc-read")
+if not TERMUX_NFC_READ_BIN:
+    # Fallback to standard Termux binary path (useful when running as root or in non-standard shell environment)
+    ABS_PATH = "/data/data/com.termux/files/usr/bin/termux-nfc-read"
+    if os.path.exists(ABS_PATH):
+        TERMUX_NFC_READ_BIN = ABS_PATH
+
 # ANSI Colors for premium terminal aesthetics (Green-only Matrix style)
 C_BLUE = "\033[92m"
 C_CYAN = "\033[92m"
@@ -28,11 +36,11 @@ def print_header():
     print(f"{C_GREEN}{C_BOLD}================================================={C_END}")
 
 def check_termux_api():
-    if not shutil.which("termux-nfc-read"):
+    if not TERMUX_NFC_READ_BIN:
         print_header()
         print(f"{C_RED}{C_BOLD}[!] ERRORE: Strumenti Termux:API non trovati nel terminale!{C_END}\n")
         print("Per poter scansionare tag NFC da Termux è necessario:")
-        print(f"1. Installare l'app {C_YELLOW}Termux:API{C_END} da F-Droid o Google Play Store.")
+        print(f"1. Installare l'app {C_YELLOW}Termux:API{C_END} da F-Droid.")
         print(f"2. Installare il pacchetto nel terminale eseguendo: {C_GREEN}pkg install termux-api{C_END}")
         print("3. Assicurarsi che l'NFC e i permessi NFC per Termux siano attivi sul telefono.")
         print("\nPremi INVIO per uscire...")
@@ -64,7 +72,7 @@ def scan_tag():
     
     try:
         # Run termux-nfc-read which outputs JSON when tag is scanned
-        process = subprocess.Popen(["termux-nfc-read"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen([TERMUX_NFC_READ_BIN], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
         # We wait for the command to return output
         stdout, stderr = process.communicate()
