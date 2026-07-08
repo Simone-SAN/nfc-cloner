@@ -39,6 +39,11 @@ def check_termux_api():
     if not TERMUX_NFC_READ_BIN:
         print_header()
         print(f"{C_RED}{C_BOLD}[!] ERRORE: Strumenti Termux:API non trovati nel terminale!{C_END}\n")
+        print(f"{C_BOLD}--- INFORMAZIONI DI DEBUG ---{C_END}")
+        print(f"OS Rilevato: {sys.platform} ({os.name})")
+        print(f"Cartella di esecuzione: {os.getcwd()}")
+        print(f"PATH di sistema: {os.environ.get('PATH', 'Non disponibile')}")
+        print(f"{C_BOLD}----------------------------{C_END}\n")
         print("Per poter scansionare tag NFC da Termux è necessario:")
         print(f"1. Installare l'app {C_YELLOW}Termux:API{C_END} da F-Droid.")
         print(f"2. Installare il pacchetto nel terminale eseguendo: {C_GREEN}pkg install termux-api{C_END}")
